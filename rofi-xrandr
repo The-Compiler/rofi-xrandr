@@ -1,0 +1,25 @@
+#!/bin/bash
+
+d=-  # depending on driver
+declare -A configurations=(
+    [internal]="--output HDMI${d}1 --off --output HDMI${d}2 --off --output DP${d}2-2 --off --output DP${d}1 --off"
+    [home]="--output DP${d}2-2 --left-of eDP${d}1 --auto"
+    [hdmi-left]="--output HDMI${d}2 --left-of eDP${d}1 --auto"
+    [hdmi-right]="--output HDMI${d}2 --right-of eDP${d}1 --auto"
+    [hdmi-same]="--output HDMI${d}2 --same-as eDP${d}1 --auto"
+    [dvi-right]="--output HDMI${d}1 --right-of eDP${d}1 --auto"
+    [dvi-left]="--output HDMI${d}1 --left-of eDP${d}1 --auto"
+    [dvi-same]="--output HDMI${d}1 --same-as eDP${d}1 --auto"
+)
+
+choice=$(printf '%s\n' "${!configurations[@]}" | rofi -dmenu)
+[[ $? != 0 ]] && exit
+config=${configurations[$choice]}
+
+xrandr $config
+herbstclient detect_monitors
+herbstclient reload
+
+# FIXME are those IDs fixed?
+xinput map-to-output 9 eDP-1
+xinput map-to-output 20 eDP-1
