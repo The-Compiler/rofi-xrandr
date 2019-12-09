@@ -29,13 +29,13 @@ screen=$(printf '%s\n' "${!screens[@]}" "internal" | rofi -dmenu -p "screen")
 [[ $? != 0 ]] && exit 1
 if [[ $screen == internal ]]; then
     xrandr --output "${screens[hdmi]}" --off --output "${screens[dvi]}" --off --output "${screens[dp]}" --off
-    exit 0
+else
+
+    orientation=$(printf '%s\n' "${!orientations[@]}" | rofi -dmenu -p "orientation")
+    [[ $? != 0 ]] && exit 1
+    xrandr --output "${screens[$screen]}" "${orientations[$orientation]}" "eDP${d}1" --auto
 fi
 
-orientation=$(printf '%s\n' "${!orientations[@]}" | rofi -dmenu -p "orientation")
-[[ $? != 0 ]] && exit 1
-
-xrandr --output "${screens[$screen]}" "${orientations[$orientation]}" "eDP${d}1" --auto
 herbstclient detect_monitors
 herbstclient reload
 
