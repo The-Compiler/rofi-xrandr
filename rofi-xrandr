@@ -1,6 +1,19 @@
 #!/bin/bash
 
 d=-  # depending on driver
+
+declare -A screens=(
+    [hdmi]="HDMI${d}2"
+    [dvi]="HDMI${d}1"
+    [dp]="DP${d}2-2"
+)
+
+declare -A orientations=(
+    [left]="--left-of"
+    [right]="--right-of"
+    [same]="--same-as"
+)
+
 declare -A configurations=(
     [internal]="--output HDMI${d}1 --off --output HDMI${d}2 --off --output DP${d}2-2 --off --output DP${d}1 --off"
     [home]="--output DP${d}2-2 --left-of eDP${d}1 --auto"
@@ -12,14 +25,20 @@ declare -A configurations=(
     [dvi-same]="--output HDMI${d}1 --same-as eDP${d}1 --auto"
 )
 
-choice=$(printf '%s\n' "${!configurations[@]}" | rofi -dmenu)
-[[ $? != 0 ]] && exit
-config=${configurations[$choice]}
+screen=$(printf '%s\n' "${!screens[@]}" "internal" | rofi -dmenu -p "screen")
+[[ $? != 0 ]] && exit 1
+if [[ $screen == internal ]]; then
+    xrandr --output "${screens[hdmi]}" --off --output "${screens[dvi]}" --off --output "${screens[dp]}" --off
+    exit 0
+fi
 
-xrandr $config
+orientation=$(printf '%s\n' "${!orientations[@]}" | rofi -dmenu -p "orientation")
+[[ $? != 0 ]] && exit 1
+
+xrandr --output "${screens[$screen]}" "${orientations[$orientation]}" "eDP${d}1" --auto
 herbstclient detect_monitors
 herbstclient reload
 
 # FIXME are those IDs fixed?
-xinput map-to-output 9 eDP-1
-xinput map-to-output 20 eDP-1
+xinput map-to-output 9 eDP${d}1
+xinput map-to-output 20 eDP${d}1
