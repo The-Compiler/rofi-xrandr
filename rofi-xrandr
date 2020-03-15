@@ -25,7 +25,14 @@ declare -A configurations=(
     [dvi-same]="--output HDMI${d}1 --same-as eDP${d}1 --auto"
 )
 
-screen=$(printf '%s\n' "${!screens[@]}" "internal" | rofi -dmenu -p "screen")
+connected_screens=()
+for name in "${!screens[@]}"; do
+    if xrandr | grep -q "${screens[$name]} connected"; then
+        connected_screens+="$name"
+    fi
+done
+
+screen=$(printf '%s\n' "${connected_screens[@]}" "internal" | rofi -dmenu -p "screen")
 [[ $? != 0 ]] && exit 1
 if [[ $screen == internal ]]; then
     xrandr --output "${screens[hdmi]}" --off --output "${screens[dvi]}" --off --output "${screens[dp]}" --off
