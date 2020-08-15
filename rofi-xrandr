@@ -8,10 +8,11 @@ declare -A screens=(
     [dp]="DP${d}2-2"
 )
 
-declare -A orientations=(
-    [left]="--left-of"
-    [right]="--right-of"
-    [same]="--same-as"
+declare -A configs=(
+    [left]="--left-of eDP${d}1 --auto"
+    [left fullhd]="--left-of eDP${d}1 --mode 1920x1080"
+    [right]="--right-of eDP${d}1 --auto"
+    [same]="--same-as eDP${d}1 --auto"
 )
 
 connected_screens=()
@@ -27,9 +28,9 @@ if [[ $screen == internal ]]; then
     xrandr --output "${screens[hdmi]}" --off --output "${screens[dvi]}" --off --output "${screens[dp]}" --off
 else
 
-    orientation=$(printf '%s\n' "${!orientations[@]}" | rofi -dmenu -p "orientation")
+    config=$(printf '%s\n' "${!configs[@]}" | rofi -dmenu -p "config")
     [[ $? != 0 ]] && exit 1
-    xrandr --output "${screens[$screen]}" "${orientations[$orientation]}" "eDP${d}1" --auto
+    xrandr --output "${screens[$screen]}" ${configs[$config]}
 fi
 
 herbstclient detect_monitors
