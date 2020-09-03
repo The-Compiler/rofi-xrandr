@@ -3,9 +3,9 @@
 d=-  # depending on driver
 
 declare -A screens=(
-    [hdmi]="HDMI${d}2"
-    [dvi]="HDMI${d}1"
-    [dp]="DP${d}2-2"
+    [hdmi]="HDMI${d}1"
+    [dp1]="DP${d}1"
+    [dp2]="DP${d}2"
 )
 
 declare -A configs=(
@@ -17,15 +17,15 @@ declare -A configs=(
 
 connected_screens=()
 for name in "${!screens[@]}"; do
-    if xrandr | grep -q "${screens[$name]} connected"; then
-        connected_screens+="$name"
+    if xrandr | grep -q "^${screens[$name]} connected"; then
+        connected_screens+=("$name")
     fi
 done
 
 screen=$(printf '%s\n' "${connected_screens[@]}" "internal" | rofi -dmenu -p "screen")
 [[ $? != 0 ]] && exit 1
 if [[ $screen == internal ]]; then
-    xrandr --output "${screens[hdmi]}" --off --output "${screens[dvi]}" --off --output "${screens[dp]}" --off
+    xrandr --output "${screens[hdmi]}" --off --output "${screens[hdmi]}" --off --output "${screens[dp1]}" --off --output "${screens[dp2]}" --off
 else
 
     config=$(printf '%s\n' "${!configs[@]}" | rofi -dmenu -p "config")
@@ -35,7 +35,3 @@ fi
 
 herbstclient detect_monitors
 herbstclient reload
-
-# FIXME are those IDs fixed?
-xinput map-to-output 9 eDP${d}1
-xinput map-to-output 20 eDP${d}1
