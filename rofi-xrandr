@@ -1,18 +1,18 @@
 #!/bin/bash
 
-d=-  # depending on driver
-
 declare -A screens=(
-    [hdmi]="HDMI${d}1"
-    [dp1]="DP${d}1"
-    [dp2]="DP${d}2"
+    [hdmi]="HDMI-A-0"
+    [dp1]="DisplayPort-0"
+    [dp2]="DisplayPort-1"
+    [hdmi-dock]="DisplayPort-2"
+    [hdmi-dock-2]="DisplayPort-3"
 )
 
 declare -A configs=(
-    [left]="--left-of eDP${d}1 --auto"
-    [left fullhd]="--left-of eDP${d}1 --mode 1920x1080"
-    [right]="--right-of eDP${d}1 --auto"
-    [same]="--same-as eDP${d}1 --auto"
+    [left]="--left-of eDP --auto"
+    [left fullhd]="--left-of eDP --mode 1920x1080"
+    [right]="--right-of eDP --auto"
+    [same]="--same-as eDP --auto"
 )
 
 connected_screens=()
@@ -25,7 +25,7 @@ done
 screen=$(printf '%s\n' "${connected_screens[@]}" "internal" | rofi -dmenu -p "screen" -m -5)
 [[ $? != 0 ]] && exit 1
 if [[ $screen == internal ]]; then
-    xrandr --output "${screens[hdmi]}" --off --output "${screens[hdmi]}" --off --output "${screens[dp1]}" --off --output "${screens[dp2]}" --off
+    xrandr --output "${screens[hdmi]}" --off --output "${screens[hdmi]}" --off --output "${screens[dp1]}" --off --output "${screens[dp2]}" --off --output "${screens[hdmi-dock]}" --off --output "${screens[hdmi-dock-2]}" --off
 else
 
     config=$(printf '%s\n' "${!configs[@]}" | rofi -dmenu -p "config" -m -5)
