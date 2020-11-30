@@ -22,13 +22,13 @@ for name in "${!screens[@]}"; do
     fi
 done
 
-screen=$(printf '%s\n' "${connected_screens[@]}" "internal" | rofi -dmenu -p "screen")
+screen=$(printf '%s\n' "${connected_screens[@]}" "internal" | rofi -dmenu -p "screen" -m -5)
 [[ $? != 0 ]] && exit 1
 if [[ $screen == internal ]]; then
     xrandr --output "${screens[hdmi]}" --off --output "${screens[hdmi]}" --off --output "${screens[dp1]}" --off --output "${screens[dp2]}" --off
 else
 
-    config=$(printf '%s\n' "${!configs[@]}" | rofi -dmenu -p "config")
+    config=$(printf '%s\n' "${!configs[@]}" | rofi -dmenu -p "config" -m -5)
     [[ $? != 0 ]] && exit 1
     xrandr --output "${screens[$screen]}" ${configs[$config]}
 fi
