@@ -5,7 +5,8 @@ declare -A screens=(
     [dp1]="DisplayPort-0"
     [dp2]="DisplayPort-1"
     [hdmi-dock]="DisplayPort-2"
-    [hdmi-dock-2]="DisplayPort-3"
+    [dp-dock-1]="DisplayPort-3"
+    [dp-dock-2]="DisplayPort-4"
 )
 
 declare -A configs=(
@@ -22,12 +23,14 @@ for name in "${!screens[@]}"; do
     fi
 done
 
-screen=$(printf '%s\n' "${connected_screens[@]}" "internal" | rofi -dmenu -p "screen" -m -5)
+screen=$(printf '%s\n' "${connected_screens[@]}" "internal" "home" | rofi -dmenu -p "screen" -m -5)
 [[ $? != 0 ]] && exit 1
 if [[ $screen == internal ]]; then
-    xrandr --output "${screens[hdmi]}" --off --output "${screens[hdmi]}" --off --output "${screens[dp1]}" --off --output "${screens[dp2]}" --off --output "${screens[hdmi-dock]}" --off --output "${screens[hdmi-dock-2]}" --off
+    xrandr --output "${screens[hdmi]}" --off --output "${screens[hdmi]}" --off --output "${screens[dp1]}" --off --output "${screens[dp2]}" --off --output "${screens[hdmi-dock]}" --off --output "${screens[dp-dock-1]}" --off --output "${screens[dp-dock-2]}" --off
+elif [[ $screen == home ]]; then
+    xrandr --output "${screens[dp-dock-2]}" --left-of "eDP" --auto
+    xrandr --output "${screens[hdmi]}" --left-of "${screens[dp-dock-2]}"  --auto
 else
-
     config=$(printf '%s\n' "${!configs[@]}" | rofi -dmenu -p "config" -m -5)
     [[ $? != 0 ]] && exit 1
     xrandr --output "${screens[$screen]}" ${configs[$config]}
