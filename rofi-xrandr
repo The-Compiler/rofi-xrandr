@@ -23,19 +23,24 @@ for name in "${!screens[@]}"; do
     fi
 done
 
+output=
 screen=$(printf '%s\n' "${connected_screens[@]}" "internal" "home" | rofi -dmenu -p "screen" -m -5)
 [[ $? != 0 ]] && exit 1
 if [[ $screen == internal ]]; then
-    xrandr --output "${screens[hdmi]}" --off --output "${screens[hdmi]}" --off --output "${screens[dp1]}" --off --output "${screens[dp2]}" --off --output "${screens[hdmi-dock]}" --off --output "${screens[dp-dock-1]}" --off --output "${screens[dp-dock-2]}" --off
+    output+=$(xrandr --output "${screens[hdmi]}" --off --output "${screens[hdmi]}" --off --output "${screens[dp1]}" --off --output "${screens[dp2]}" --off --output "${screens[hdmi-dock]}" --off --output "${screens[dp-dock-1]}" --off --output "${screens[dp-dock-2]}" --off 2>&1)
 elif [[ $screen == home ]]; then
-    dp_output=$(xrandr | grep -o 'DisplayPort-[0-9] connected' | cut -d' ' -f1)
-    xrandr --output "$dp_output" --left-of "eDP" --auto
-    xrandr --output "${screens[hdmi]}" --left-of "$dp_output"  --auto
-    xrandr --output eDP --auto
+    dp_output=$(xrandr | grep -o 'DisplayPort-[0-9] connected' | cut -d' ' -f1 2>&1)
+    output+=$(xrandr --output "$dp_output" --left-of "eDP" --auto 2>&1)
+    output+=$(xrandr --output "${screens[hdmi]}" --left-of "$dp_output"  --auto --rotate right 2>&1)
+    output+=$(xrandr --output eDP --auto 2>&1)
 else
     config=$(printf '%s\n' "${!configs[@]}" | rofi -dmenu -p "config" -m -5)
     [[ $? != 0 ]] && exit 1
-    xrandr --output "${screens[$screen]}" ${configs[$config]}
+    output+=$(xrandr --output "${screens[$screen]}" ${configs[$config]} 2>&1)
+fi
+
+if [[ $output ]]; then
+    notify-send -u critical "$output"
 fi
 
 herbstclient detect_monitors
