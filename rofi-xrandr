@@ -28,7 +28,11 @@ output=
 screen=$(printf '%s\n' "${connected_screens[@]}" "internal" "home" | rofi -dmenu -p "screen" -m -5)
 [[ $? != 0 ]] && exit 1
 if [[ $screen == internal ]]; then
-    output+=$(xrandr --output "${screens[hdmi]}" --off --output "${screens[hdmi]}" --off --output "${screens[dp1]}" --off --output "${screens[dp2]}" --off --output "${screens[hdmi-dock]}" --off --output "${screens[dp-dock-1]}" --off --output "${screens[dp-dock-2]}" --off 2>&1)
+    xrandr_args=()
+    for name in "${!connected_screens[@]}"; do
+        xrandr_args+=(--output "$name" --off)
+    done
+    output+=$(xrandr "${xrandr_args[@]}" 2>&1)
 elif [[ $screen == home ]]; then
     dp_output=$(xrandr | grep -o 'DisplayPort-[0-9] connected' | cut -d' ' -f1 2>&1)
     output+=$(xrandr --output "$dp_output" --left-of "eDP" --auto 2>&1)
