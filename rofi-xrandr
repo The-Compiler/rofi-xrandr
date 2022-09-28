@@ -11,6 +11,7 @@ declare -A screens=(
 
 declare -A configs=(
     [left]="--left-of eDP --auto"
+    [above]="--above eDP --auto"
     [left fullhd]="--left-of eDP --mode 1920x1080"
     [right]="--right-of eDP --auto"
     [same]="--same-as eDP --auto"
