@@ -7,6 +7,8 @@ declare -A screens=(
     [hdmi-dock]="DisplayPort-2"
     [dp-dock-1]="DisplayPort-3"
     [dp-dock-2]="DisplayPort-4"
+    [dp-dock-3]="DisplayPort-5"
+    [dp-dock-4]="DisplayPort-6"
 )
 
 declare -A configs=(
