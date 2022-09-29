@@ -31,8 +31,10 @@ screen=$(printf '%s\n' "${connected_screens[@]}" "internal" "home" "present" | r
 [[ $? != 0 ]] && exit 1
 if [[ $screen == internal ]]; then
     xrandr_args=()
-    for name in "${connected_screens[@]}"; do
-        xrandr_args+=(--output "${screens[$name]}" --off)
+    for name in "${!screens[@]}"; do
+        if xrandr | grep -q "^${screens[$name]}"; then
+            xrandr_args+=(--output "${screens[$name]}" --off)
+        fi
     done
     output+=$(xrandr "${xrandr_args[@]}" 2>&1)
 elif [[ $screen == home ]]; then
