@@ -1,4 +1,4 @@
-#!/bin/bash
+
 
 declare -A screens=(
     [hdmi]="HDMI-A-0"
@@ -27,7 +27,7 @@ for name in "${!screens[@]}"; do
 done
 
 output=
-screen=$(printf '%s\n' "${connected_screens[@]}" "internal" "home" "present" | rofi -dmenu -p "screen" -m -5)
+screen=$(printf '%s\n' "${connected_screens[@]}" "internal" "home" "home-tmp" "present" "omicron" | rofi -dmenu -p "screen" -m -5)
 [[ $? != 0 ]] && exit 1
 if [[ $screen == internal ]]; then
     xrandr_args=()
@@ -38,15 +38,24 @@ if [[ $screen == internal ]]; then
     done
     output+=$(xrandr "${xrandr_args[@]}" 2>&1)
 elif [[ $screen == home ]]; then
-    dp_output=$(xrandr | grep -o 'DisplayPort-[0-9] connected' | cut -d' ' -f1 2>&1)
-    output+=$(xrandr --output "$dp_output" --left-of "eDP" --auto 2>&1)
-    output+=$(xrandr --output "${screens[hdmi]}" --left-of "$dp_output"  --auto --rotate right 2>&1)
+    dp_output=$(xrandr | grep -o '^DisplayPort-[0-9] connected' | cut -d' ' -f1 2>&1)
+    output+=$(xrandr --output "${screens[hdmi]}" --left-of "eDP" --auto 2>&1)
+    output+=$(xrandr --output "$dp_output" --left-of "${screens[hdmi]}"  --auto --rotate right 2>&1)
     output+=$(xrandr --output eDP --auto 2>&1)
+elif [[ $screen == home-tmp ]]; then
+    dp_output=$(xrandr | grep -o '^DisplayPort-[0-9] connected' | cut -d' ' -f1 2>&1)
+    output+=$(xrandr --output eDP --auto 2>&1)
+    output+=$(xrandr --output "$dp_output" --above eDP --auto 2>&1)
+    output+=$(xrandr --output "${screens[hdmi]}" --left-of "$dp_output"  --auto 2>&1)
 elif [[ $screen == present ]]; then
     config=$(printf '%s\n' "${!configs[@]}" | rofi -dmenu -p "config" -m -5)
+    dp_output=$(xrandr | grep -o '^DisplayPort-[0-9] connected' | cut -d' ' -f1 2>&1)
     [[ $? != 0 ]] && exit 1
-    output+=$(xrandr --output "${screens[dp1]}" ${configs[$config]} 2>&1)
-    output+=$(xrandr --output "${screens[hdmi]}" --same-as "${screens[dp1]}" --auto 2>&1)
+    output+=$(xrandr --output "$dp_output" ${configs[$config]} 2>&1)
+    output+=$(xrandr --output "${screens[hdmi]}" --same-as "$dp_output" --auto 2>&1)
+elif [[ $screen == omicron ]]; then
+    output+=$(xrandr --output "DisplayPort-0" --left-of "eDP" --auto 2>&1)
+    output+=$(xrandr --output "DisplayPort-1" --left-of "DisplayPort-0" --auto 2>&1)
 else
     config=$(printf '%s\n' "${!configs[@]}" | rofi -dmenu -p "config" -m -5)
     [[ $? != 0 ]] && exit 1
