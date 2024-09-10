@@ -1,16 +1,15 @@
-internal=eDP
-dp_prefix=DisplayPort
+internal=eDP-1
+dp_prefix=DP
 
 declare -A screens=(
-    [hdmi]="HDMI-A-0"
-    [dp1]="$dp_prefix-0"
-    [dp2]="$dp_prefix-1"
-    [dp3]="$dp_prefix-2"
-    [hdmi-dock]="$dp_prefix-2"
-    [dp-dock-1]="$dp_prefix-3"
-    [dp-dock-2]="$dp_prefix-4"
-    [dp-dock-3]="$dp_prefix-5"
-    [dp-dock-4]="$dp_prefix-6"
+    [hdmi]="HDMI-1"
+    [dp1]="$dp_prefix-1"
+    [dp2]="$dp_prefix-2"
+    [dp3]="$dp_prefix-3"
+    [dp4]="$dp_prefix-4"
+    [dp-dock-1]="$dp_prefix-1-1"
+    [dp-dock-2]="$dp_prefix-1-2"
+    [dp-dock-3]="$dp_prefix-1-3"
 )
 
 declare -A configs=(
@@ -40,9 +39,9 @@ if [[ $screen == internal ]]; then
     done
     output+=$(xrandr "${xrandr_args[@]}" 2>&1)
 elif [[ $screen == home ]]; then
-    dp_output=$(xrandr | grep -oE '^(DisplayPort|DP)-[0-9] connected' | cut -d' ' -f1 2>&1)
-    output+=$(xrandr --output "${screens[hdmi]}" --left-of "$internal" --auto 2>&1)
-    output+=$(xrandr --output "$dp_output" --left-of "${screens[hdmi]}"  --auto --rotate right 2>&1)
+    # dp_output=$(xrandr | grep -oE '^(DisplayPort|DP)-[0-9] connected' | cut -d' ' -f1 2>&1)
+    output+=$(xrandr --output "${screens[dp2]}" --left-of "$internal" --auto 2>&1)
+    output+=$(xrandr --output "${screens[dp-dock-2]}" --left-of "${screens[dp2]}"  --auto --rotate right 2>&1)
     output+=$(xrandr --output "$internal" --auto 2>&1)
 elif [[ $screen == home-tmp ]]; then
     dp_output=$(xrandr | grep -o '^DisplayPort-[0-9] connected' | cut -d' ' -f1 2>&1)
