@@ -1,22 +1,24 @@
-
+internal=eDP
+dp_prefix=DisplayPort
 
 declare -A screens=(
     [hdmi]="HDMI-A-0"
-    [dp1]="DisplayPort-0"
-    [dp2]="DisplayPort-1"
-    [hdmi-dock]="DisplayPort-2"
-    [dp-dock-1]="DisplayPort-3"
-    [dp-dock-2]="DisplayPort-4"
-    [dp-dock-3]="DisplayPort-5"
-    [dp-dock-4]="DisplayPort-6"
+    [dp1]="$dp_prefix-0"
+    [dp2]="$dp_prefix-1"
+    [dp3]="$dp_prefix-2"
+    [hdmi-dock]="$dp_prefix-2"
+    [dp-dock-1]="$dp_prefix-3"
+    [dp-dock-2]="$dp_prefix-4"
+    [dp-dock-3]="$dp_prefix-5"
+    [dp-dock-4]="$dp_prefix-6"
 )
 
 declare -A configs=(
-    [left]="--left-of eDP --auto"
-    [above]="--above eDP --auto"
-    [left fullhd]="--left-of eDP --mode 1920x1080"
-    [right]="--right-of eDP --auto"
-    [same]="--same-as eDP --auto"
+    [left]="--left-of "$internal" --auto"
+    [above]="--above "$internal" --auto"
+    [left fullhd]="--left-of "$internal" --mode 1920x1080"
+    [right]="--right-of "$internal" --auto"
+    [same]="--same-as "$internal" --auto"
 )
 
 connected_screens=()
@@ -38,14 +40,14 @@ if [[ $screen == internal ]]; then
     done
     output+=$(xrandr "${xrandr_args[@]}" 2>&1)
 elif [[ $screen == home ]]; then
-    dp_output=$(xrandr | grep -o '^DisplayPort-[0-9] connected' | cut -d' ' -f1 2>&1)
-    output+=$(xrandr --output "${screens[hdmi]}" --left-of "eDP" --auto 2>&1)
+    dp_output=$(xrandr | grep -oE '^(DisplayPort|DP)-[0-9] connected' | cut -d' ' -f1 2>&1)
+    output+=$(xrandr --output "${screens[hdmi]}" --left-of "$internal" --auto 2>&1)
     output+=$(xrandr --output "$dp_output" --left-of "${screens[hdmi]}"  --auto --rotate right 2>&1)
-    output+=$(xrandr --output eDP --auto 2>&1)
+    output+=$(xrandr --output "$internal" --auto 2>&1)
 elif [[ $screen == home-tmp ]]; then
     dp_output=$(xrandr | grep -o '^DisplayPort-[0-9] connected' | cut -d' ' -f1 2>&1)
-    output+=$(xrandr --output eDP --auto 2>&1)
-    output+=$(xrandr --output "$dp_output" --above eDP --auto 2>&1)
+    output+=$(xrandr --output "$internal" --auto 2>&1)
+    output+=$(xrandr --output "$dp_output" --above "$internal" --auto 2>&1)
     output+=$(xrandr --output "${screens[hdmi]}" --left-of "$dp_output"  --auto 2>&1)
 elif [[ $screen == present ]]; then
     config=$(printf '%s\n' "${!configs[@]}" | rofi -dmenu -p "config" -m -5)
@@ -54,8 +56,8 @@ elif [[ $screen == present ]]; then
     output+=$(xrandr --output "$dp_output" ${configs[$config]} 2>&1)
     output+=$(xrandr --output "${screens[hdmi]}" --same-as "$dp_output" --auto 2>&1)
 elif [[ $screen == omicron ]]; then
-    output+=$(xrandr --output "DisplayPort-0" --left-of "eDP" --auto 2>&1)
-    output+=$(xrandr --output "DisplayPort-1" --left-of "DisplayPort-0" --auto 2>&1)
+    output+=$(xrandr --output "$dp_prefix-0" --left-of "$internal" --auto 2>&1)
+    output+=$(xrandr --output "$dp_prefix-1" --left-of "$dp_prefix-0" --auto 2>&1)
 else
     config=$(printf '%s\n' "${!configs[@]}" | rofi -dmenu -p "config" -m -5)
     [[ $? != 0 ]] && exit 1
