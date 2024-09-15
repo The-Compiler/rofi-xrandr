@@ -20,9 +20,10 @@ declare -A configs=(
     [same]="--same-as "$internal" --auto"
 )
 
+init_xrandr=$(xrandr)
 connected_screens=()
 for name in "${!screens[@]}"; do
-    if xrandr | grep -q "^${screens[$name]} connected"; then
+    if echo "$init_xrandr" | grep -q "^${screens[$name]} connected"; then
         connected_screens+=("$name")
     fi
 done
@@ -33,24 +34,24 @@ screen=$(printf '%s\n' "${connected_screens[@]}" "internal" "home" "home-tmp" "p
 if [[ $screen == internal ]]; then
     xrandr_args=()
     for name in "${!screens[@]}"; do
-        if xrandr | grep -q "^${screens[$name]}"; then
+        if echo "$init_xrandr" | grep -q "^${screens[$name]}"; then
             xrandr_args+=(--output "${screens[$name]}" --off)
         fi
     done
     output+=$(xrandr "${xrandr_args[@]}" 2>&1)
 elif [[ $screen == home ]]; then
-    # dp_output=$(xrandr | grep -oE '^(DisplayPort|DP)-[0-9] connected' | cut -d' ' -f1 2>&1)
+    # dp_output=$(echo "$init_xrandr" | grep -oE '^(DisplayPort|DP)-[0-9] connected' | cut -d' ' -f1 2>&1)
     output+=$(xrandr --output "${screens[dp2]}" --left-of "$internal" --auto 2>&1)
     output+=$(xrandr --output "${screens[dp-dock-2]}" --left-of "${screens[dp2]}"  --auto --rotate right 2>&1)
     output+=$(xrandr --output "$internal" --auto 2>&1)
 elif [[ $screen == home-tmp ]]; then
-    dp_output=$(xrandr | grep -o '^DisplayPort-[0-9] connected' | cut -d' ' -f1 2>&1)
+    dp_output=$(echo "$init_xrandr" | grep -o '^DisplayPort-[0-9] connected' | cut -d' ' -f1 2>&1)
     output+=$(xrandr --output "$internal" --auto 2>&1)
     output+=$(xrandr --output "$dp_output" --above "$internal" --auto 2>&1)
     output+=$(xrandr --output "${screens[hdmi]}" --left-of "$dp_output"  --auto 2>&1)
 elif [[ $screen == present ]]; then
     config=$(printf '%s\n' "${!configs[@]}" | rofi -dmenu -p "config" -m -5)
-    dp_output=$(xrandr | grep -o '^DisplayPort-[0-9] connected' | cut -d' ' -f1 2>&1)
+    dp_output=$(echo "$init_xrandr" | grep -o '^DisplayPort-[0-9] connected' | cut -d' ' -f1 2>&1)
     [[ $? != 0 ]] && exit 1
     output+=$(xrandr --output "$dp_output" ${configs[$config]} 2>&1)
     output+=$(xrandr --output "${screens[hdmi]}" --same-as "$dp_output" --auto 2>&1)
