@@ -89,7 +89,7 @@ def notify_user(message: str) -> None:
     )
 
 
-def xrandr_command(commands: list[tuple[Any]]) -> None:
+def xrandr_command(commands: list[tuple[Any, ...]]) -> None:
     """Helper method to execute xrandr commands."""
     args = ["xrandr"]
     for output, action, *options in commands:
