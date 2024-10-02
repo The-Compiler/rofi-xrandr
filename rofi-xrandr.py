@@ -2,44 +2,50 @@ import sys
 from pathlib import Path
 from enum import Enum
 from dataclasses import dataclass
-from typing import Any
+from typing import Iterator, Sequence
 import subprocess
 
-INTERNAL = "eDP-1"
 DP_PREFIX = "DP"
 
 
-class Action(Enum):
+class Relation(Enum):
     LEFT_OF = "left-of"
     ABOVE = "above"
     RIGHT_OF = "right-of"
     SAME_AS = "same-as"
-    OFF = "off"
+
+
+class XrandrArg(Enum):
+    AUTO = "--auto"
+    MODE = "--mode"
+    OFF = "--off"
+    ROTATE = "--rotate"
 
 
 @dataclass
 class ScreenConfig:
-    action: Action
+    relation: Relation
     mode: str
 
 
-SCREENS = {
-    "hdmi": "HDMI-1",
-    "dp1": f"{DP_PREFIX}-1",
-    "dp2": f"{DP_PREFIX}-2",
-    "dp3": f"{DP_PREFIX}-3",
-    "dp4": f"{DP_PREFIX}-4",
-    "dp-dock-1": f"{DP_PREFIX}-1-1",
-    "dp-dock-2": f"{DP_PREFIX}-1-2",
-    "dp-dock-3": f"{DP_PREFIX}-1-3",
-}
+class KnownScreen(Enum):
+    INTERNAL = "eDP-1"
+    HDMI = "HDMI-1"
+    DP1 = "DP-1"
+    DP2 = "DP-2"
+    DP3 = "DP-3"
+    DP4 = "DP-4"
+    DP_DOCK_1 = "DP-1-1"
+    DP_DOCK_2 = "DP-1-2"
+    DP_DOCK_3 = "DP-1-3"
+
 
 CONFIGS = {
-    "left": ScreenConfig(Action.LEFT_OF, "auto"),
-    "above": ScreenConfig(Action.ABOVE, "auto"),
-    "left fullhd": ScreenConfig(Action.LEFT_OF, "1920x1080"),
-    "right": ScreenConfig(Action.RIGHT_OF, "auto"),
-    "same": ScreenConfig(Action.SAME_AS, "auto"),
+    "left": ScreenConfig(Relation.LEFT_OF, "auto"),
+    "above": ScreenConfig(Relation.ABOVE, "auto"),
+    "left fullhd": ScreenConfig(Relation.LEFT_OF, "1920x1080"),
+    "right": ScreenConfig(Relation.RIGHT_OF, "auto"),
+    "same": ScreenConfig(Relation.SAME_AS, "auto"),
 }
 
 
@@ -54,18 +60,19 @@ def run_subprocess(cmd: list[str]) -> str:
         sys.exit(1)
 
 
-def get_connected_screens() -> list[str]:
+def get_connected_screens() -> Iterator[str]:
     try:
-        result = subprocess.run(["xrandr"], capture_output=True, text=True, check=True)
-        xrandr_output = result.stdout.splitlines()
-        connected_screens = []
-        for name, screen in SCREENS.items():
-            if any(line.startswith(f"{screen} connected ") for line in xrandr_output):
-                connected_screens.append(name)
-        return connected_screens
+        proc = subprocess.run(["xrandr"], capture_output=True, text=True, check=True)
     except subprocess.CalledProcessError as e:
         notify_user(f"Error checking connected screens: {e.stderr}")
         sys.exit(1)
+
+    for line in proc.stdout.splitlines():
+        if line.startswith(" "):
+            continue
+        screen, state, *_ = line.split()
+        if state == "connected":
+            yield screen
 
 
 def select_option(options: list[str], prompt: str) -> str | None:
@@ -88,99 +95,111 @@ def notify_user(message: str) -> None:
         ["notify-send", "-u", "critical", "Screen Configuration Error", message]
     )
 
-
-def xrandr_command(commands: list[tuple[Any, ...]]) -> None:
+def xrandr_command(
+    commands: Sequence[tuple[str | KnownScreen | Relation | XrandrArg, ...]],
+) -> None:
     """Helper method to execute xrandr commands."""
     args = ["xrandr"]
-    for output, action, *options in commands:
-        args.extend(["--output", output, f"--{action.value}", *options])
+    for output, *options in commands:
+        args += ["--output", output]
+        args += [
+            opt.value if isinstance(opt, (Relation, KnownScreen, XrandrArg)) else opt
+            for opt in options
+        ]
     run_subprocess(args)
 
 
-def configure_internal_screen() -> None:
-    commands = [(screen_name, Action.OFF) for screen_name in SCREENS.values()]
+def configure_internal_screen(connected_screens: list[str]) -> None:
+    """Turn off everything, only laptop screen."""
+    commands = [(screen, XrandrArg.OFF) for screen in connected_screens]
     xrandr_command(commands)
 
 
 def configure_home_screen() -> None:
+    """[vertical DisplayPort] - [normal USB-C] - [laptop]"""
     commands = [
-        (SCREENS["dp2"], Action.LEFT_OF, INTERNAL, "--auto"),
+        (KnownScreen.DP2, Relation.LEFT_OF, KnownScreen.INTERNAL, XrandrArg.AUTO),
         (
-            SCREENS["dp-dock-2"],
-            Action.LEFT_OF,
-            SCREENS["dp2"],
-            "--auto",
-            "--rotate",
+            KnownScreen.DP_DOCK_2,
+            Relation.LEFT_OF,
+            KnownScreen.DP2,
+            XrandrArg.AUTO,
+            XrandrArg.ROTATE,
             "right",
         ),
-        (INTERNAL, Action.OFF),
+        (KnownScreen.INTERNAL, XrandrArg.AUTO),
     ]
     xrandr_command(commands)
 
 
 def configure_present_screen(connected_screens: list[str]) -> None:
+    """[projector] == [external USB-C] - [laptop]"""
     config = select_option(list(CONFIGS.keys()), "config")
     if config is None:
-        sys.exit(0)  # Exit silently if user aborted the operation
+        # User aborted the operation
+        sys.exit(0)
 
     dp_outputs = [
-        output
-        for output in SCREENS.values()
-        if output.startswith(DP_PREFIX) and f"{output} connected" in connected_screens
+        screen for screen in connected_screens if screen.startswith(DP_PREFIX)
     ]
     if not dp_outputs:
         sys.exit(1)
 
-    dp_output = dp_outputs[0]
+    dp_output = next((output for output in dp_outputs if output.count("-") == 1))
 
-    if SCREENS["hdmi"] in connected_screens:
-        proj_output = SCREENS["hdmi"]
+    if KnownScreen.HDMI.value in connected_screens:
+        proj_output = KnownScreen.HDMI
     else:
-        proj_output = next((output for output in dp_outputs if "-" in output), None)
+        proj_output = next((output for output in dp_outputs if output.count("-") == 2))
 
     if proj_output:
         config_settings = CONFIGS[config]
         commands = [
             (
                 dp_output,
-                config_settings.action,
-                INTERNAL,
-                "--mode",
+                config_settings.relation,
+                KnownScreen.INTERNAL,
+                XrandrArg.MODE,
                 config_settings.mode,
             ),
-            (proj_output, Action.SAME_AS, dp_output, "--auto"),
+            (proj_output, Relation.SAME_AS, dp_output, XrandrArg.AUTO),
         ]
         xrandr_command(commands)
 
 
-def configure_other_screen(screen: str) -> None:
+def configure_other_screen(selection: str) -> None:
     config = select_option(list(CONFIGS.keys()), "config")
     if config is None:
         sys.exit(0)  # Exit silently if user aborted the operation
 
+    try:
+        screen = KnownScreen(selection.upper())
+    except ValueError:
+        screen = selection
+
     config_settings = CONFIGS[config]
     commands = [
         (
-            SCREENS[screen],
-            config_settings.action,
-            INTERNAL,
-            "--mode",
+            screen,
+            config_settings.relation,
+            KnownScreen.INTERNAL,
+            XrandrArg.MODE,
             config_settings.mode,
         )
     ]
     xrandr_command(commands)
 
 
-def apply_screen_configuration(screen: str, connected_screens: list[str]) -> None:
+def apply_screen_configuration(selection: str, connected_screens: list[str]) -> None:
     try:
-        if screen == "internal":
-            configure_internal_screen()
-        elif screen == "home":
+        if selection == "internal":
+            configure_internal_screen(connected_screens)
+        elif selection == "home":
             configure_home_screen()
-        elif screen == "present":
+        elif selection == "present":
             configure_present_screen(connected_screens)
         else:
-            configure_other_screen(screen)
+            configure_other_screen(selection)
     except subprocess.CalledProcessError as e:
         notify_user(f"Error applying screen configuration: {e.stderr}")
 
@@ -207,10 +226,20 @@ def restore_wallpaper() -> None:
 
 
 def main() -> None:
-    connected_screens = get_connected_screens()
+    connected_screens = list(get_connected_screens())
 
-    available_screens = connected_screens + ["internal", "home", "present"]
-    screen = select_option(available_screens, "screen")
+    options = ["internal"]
+    if connected_screens != [KnownScreen.INTERNAL.value]:
+        options += ["home", "present", ""]
+    for screen in connected_screens:
+        if screen == KnownScreen.INTERNAL.value:
+            continue
+        try:
+            options.append(KnownScreen(screen).name.lower())
+        except ValueError:
+            options.append(screen)
+
+    screen = select_option(options, "screen")
 
     if screen is None:
         # Exit silently if user aborted the operation
