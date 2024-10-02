@@ -29,9 +29,11 @@ for name in "${!screens[@]}"; do
 done
 
 output=
-screen=$(printf '%s\n' "${connected_screens[@]}" "internal" "home" "home-tmp" "present" "omicron" | rofi -dmenu -p "screen" -m -5)
+screen=$(printf '%s\n' "${connected_screens[@]}" "internal" "home" "present" | rofi -dmenu -p "screen" -m -5)
 [[ $? != 0 ]] && exit 1
+
 if [[ $screen == internal ]]; then
+    # turn off everything, only laptop screen
     xrandr_args=()
     for name in "${!screens[@]}"; do
         if echo "$init_xrandr" | grep -q "^${screens[$name]}"; then
@@ -40,32 +42,27 @@ if [[ $screen == internal ]]; then
     done
     output+=$(xrandr "${xrandr_args[@]}" 2>&1)
 elif [[ $screen == home ]]; then
-    # dp_output=$(echo "$init_xrandr" | grep -oE '^(DisplayPort|DP)-[0-9] connected' | cut -d' ' -f1 2>&1)
+    # [vertical DisplayPort] - [normal USB-C] - [laptop]
     output+=$(xrandr --output "${screens[dp2]}" --left-of "$internal" --auto 2>&1)
     output+=$(xrandr --output "${screens[dp-dock-2]}" --left-of "${screens[dp2]}"  --auto --rotate right 2>&1)
     output+=$(xrandr --output "$internal" --auto 2>&1)
-elif [[ $screen == home-tmp ]]; then
-    dp_output=$(echo "$init_xrandr" | grep -o '^DisplayPort-[0-9] connected' | cut -d' ' -f1 2>&1)
-    output+=$(xrandr --output "$internal" --auto 2>&1)
-    output+=$(xrandr --output "$dp_output" --above "$internal" --auto 2>&1)
-    output+=$(xrandr --output "${screens[hdmi]}" --left-of "$dp_output"  --auto 2>&1)
 elif [[ $screen == present ]]; then
+    # [projector] == [external USB-C] - [laptop]
     config=$(printf '%s\n' "${!configs[@]}" | rofi -dmenu -p "config" -m -5)
+
+    # projector can be connected via HDMI or via USB-C
     dp_output=$(echo "$init_xrandr" | grep -o "^$dp_prefix-[0-9] connected" | cut -d' ' -f1 2>&1)
     [[ $? != 0 ]] && exit 1
     if printf '%s\0' "${connected_screens[@]}" | grep -Fxqz -- "${screens[hdmi]}"; then
         proj_output="${screens[hdmi]}"
-    else
-        # USB-C
+    else  # USB-C
         proj_output=$(echo "$init_xrandr" | grep -o "^$dp_prefix-[0-9]-[0-9] connected" | cut -d' ' -f1 2>&1)
     fi
 
     output+=$(xrandr --output "$dp_output" ${configs[$config]} 2>&1)
     output+=$(xrandr --output "$proj_output" --same-as "$dp_output" --auto 2>&1)
-elif [[ $screen == omicron ]]; then
-    output+=$(xrandr --output "$dp_prefix-0" --left-of "$internal" --auto 2>&1)
-    output+=$(xrandr --output "$dp_prefix-1" --left-of "$dp_prefix-0" --auto 2>&1)
 else
+    # [single output] [laptop]
     config=$(printf '%s\n' "${!configs[@]}" | rofi -dmenu -p "config" -m -5)
     [[ $? != 0 ]] && exit 1
     output+=$(xrandr --output "${screens[$screen]}" ${configs[$config]} 2>&1)
@@ -82,13 +79,9 @@ for monitor in $(herbstclient list_monitors | cut -d: -f1) ; do
 done
 [[ -f ~/.fehbg ]] && ~/.fehbg &
 
+# Pause notifications when presenting, unpause on other switch
 if [[ $screen == present ]]; then
-    notify-send "Turning off notifications"
-    sleep 1
-    dunstctl close
     dunstctl set-paused true
-elif [[ $(dunstctl is-paused) == true ]]; then
+else
     dunstctl set-paused false
-    notify-send "Turned on notifications"
 fi
-
