@@ -53,8 +53,15 @@ elif [[ $screen == present ]]; then
     config=$(printf '%s\n' "${!configs[@]}" | rofi -dmenu -p "config" -m -5)
     dp_output=$(echo "$init_xrandr" | grep -o "^$dp_prefix-[0-9] connected" | cut -d' ' -f1 2>&1)
     [[ $? != 0 ]] && exit 1
+    if printf '%s\0' "${connected_screens[@]}" | grep -Fxqz -- "${screens[hdmi]}"; then
+        proj_output="${screens[hdmi]}"
+    else
+        # USB-C
+        proj_output=$(echo "$init_xrandr" | grep -o "^$dp_prefix-[0-9]-[0-9] connected" | cut -d' ' -f1 2>&1)
+    fi
+
     output+=$(xrandr --output "$dp_output" ${configs[$config]} 2>&1)
-    output+=$(xrandr --output "${screens[hdmi]}" --same-as "$dp_output" --auto 2>&1)
+    output+=$(xrandr --output "$proj_output" --same-as "$dp_output" --auto 2>&1)
 elif [[ $screen == omicron ]]; then
     output+=$(xrandr --output "$dp_prefix-0" --left-of "$internal" --auto 2>&1)
     output+=$(xrandr --output "$dp_prefix-1" --left-of "$dp_prefix-0" --auto 2>&1)
