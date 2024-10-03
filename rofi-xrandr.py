@@ -181,7 +181,7 @@ def configure_other_screen(selection: str) -> bool:
         return False
 
     try:
-        screen = KnownScreen(selection.upper())
+        screen = KnownScreen[selection.upper()]
     except ValueError:
         screen = selection
 
