@@ -45,11 +45,11 @@ class Error(Exception):
 
 
 CONFIGS = {
-    "left": ScreenConfig(Relation.LEFT_OF, "auto"),
-    "above": ScreenConfig(Relation.ABOVE, "auto"),
-    "left fullhd": ScreenConfig(Relation.LEFT_OF, "1920x1080"),
-    "right": ScreenConfig(Relation.RIGHT_OF, "auto"),
-    "same": ScreenConfig(Relation.SAME_AS, "auto"),
+    "left": ScreenConfig(Relation.LEFT_OF, [XrandrArg.AUTO]),
+    "above": ScreenConfig(Relation.ABOVE, [XrandrArg.AUTO]),
+    "left fullhd": ScreenConfig(Relation.LEFT_OF, [XrandrArg.MODE, "1920x1080"]),
+    "right": ScreenConfig(Relation.RIGHT_OF, [XrandrArg.AUTO]),
+    "same": ScreenConfig(Relation.SAME_AS, [XrandrArg.AUTO]),
 }
 
 
@@ -168,8 +168,7 @@ def configure_present_screen(connected_screens: list[str]) -> bool:
             mirror_output,
             config_settings.relation,
             KnownScreen.INTERNAL,
-            XrandrArg.MODE,
-            config_settings.mode,
+            *config_settings.args
         ),
         (proj_output, Relation.SAME_AS, mirror_output, XrandrArg.AUTO),
     ]
@@ -194,7 +193,7 @@ def configure_other_screen(selection: str) -> bool:
             config_settings.relation,
             KnownScreen.INTERNAL,
             XrandrArg.MODE,
-            config_settings.mode,
+            *config_settings.args,
         )
     ]
     xrandr_command(commands)
