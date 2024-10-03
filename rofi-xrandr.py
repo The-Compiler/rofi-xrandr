@@ -1,4 +1,3 @@
-import sys
 from pathlib import Path
 from enum import Enum
 from dataclasses import dataclass
@@ -95,6 +94,7 @@ def notify_user(message: str) -> None:
     subprocess.run(
         ["notify-send", "-u", "critical", "Screen Configuration Error", message]
     )
+
 
 def xrandr_command(
     commands: Sequence[tuple[str | KnownScreen | Relation | XrandrArg, ...]],
@@ -241,7 +241,7 @@ def listen() -> None:
 
     context = pyudev.Context()
     monitor = pyudev.Monitor.from_netlink(context)
-    monitor.filter_by(subsystem='drm')
+    monitor.filter_by(subsystem="drm")
 
     for _ in iter(monitor.poll, None):
         # TODO can we somehow find out whether a screen was connected or disconnected?
