@@ -4,6 +4,7 @@ from enum import Enum
 from dataclasses import dataclass
 from typing import Iterator, Sequence
 import subprocess
+import argparse
 
 DP_PREFIX = "DP"
 
@@ -40,6 +41,10 @@ class KnownScreen(Enum):
     DP_DOCK_3 = "DP-1-3"
 
 
+class Error(Exception):
+    pass
+
+
 CONFIGS = {
     "left": ScreenConfig(Relation.LEFT_OF, "auto"),
     "above": ScreenConfig(Relation.ABOVE, "auto"),
@@ -56,16 +61,14 @@ def run_subprocess(cmd: list[str]) -> str:
         )
         return result.stdout.strip()
     except subprocess.CalledProcessError as e:
-        notify_user(f"Error running subprocess: {e.stderr}")
-        sys.exit(1)
+        raise Error(f"Error running subprocess: {e.stderr}")
 
 
 def get_connected_screens() -> Iterator[str]:
     try:
         proc = subprocess.run(["xrandr"], capture_output=True, text=True, check=True)
     except subprocess.CalledProcessError as e:
-        notify_user(f"Error checking connected screens: {e.stderr}")
-        sys.exit(1)
+        raise Error(f"Error checking connected screens: {e.stderr}")
 
     for line in proc.stdout.splitlines():
         if line.startswith(" "):
@@ -85,8 +88,7 @@ def select_option(options: list[str], prompt: str) -> str | None:
     if result.returncode == 1:
         return None  # User aborted the operation
     elif result.returncode != 0:
-        notify_user(f"Error selecting option: {result.stderr}")
-        sys.exit(1)
+        raise Error(f"Error selecting option: {result.stderr}")
     return result.stdout.strip()
 
 
@@ -109,13 +111,14 @@ def xrandr_command(
     run_subprocess(args)
 
 
-def configure_internal_screen(connected_screens: list[str]) -> None:
+def configure_internal_screen(connected_screens: list[str]) -> bool:
     """Turn off everything, only laptop screen."""
     commands = [(screen, XrandrArg.OFF) for screen in connected_screens]
     xrandr_command(commands)
+    return True
 
 
-def configure_home_screen() -> None:
+def configure_home_screen() -> bool:
     """[vertical DisplayPort] - [normal USB-C] - [laptop]"""
     commands = [
         (KnownScreen.DP2, Relation.LEFT_OF, KnownScreen.INTERNAL, XrandrArg.AUTO),
@@ -130,20 +133,20 @@ def configure_home_screen() -> None:
         (KnownScreen.INTERNAL, XrandrArg.AUTO),
     ]
     xrandr_command(commands)
+    return True
 
 
-def configure_present_screen(connected_screens: list[str]) -> None:
+def configure_present_screen(connected_screens: list[str]) -> bool:
     """[projector] == [external USB-C] - [laptop]"""
     config = select_option(list(CONFIGS.keys()), "config")
     if config is None:
-        # User aborted the operation
-        sys.exit(0)
+        return False
 
     dp_outputs = [
         screen for screen in connected_screens if screen.startswith(DP_PREFIX)
     ]
     if not dp_outputs:
-        sys.exit(1)
+        raise Error(f"No DisplayPort outputs found")
 
     dp_output = next((output for output in dp_outputs if output.count("-") == 1))
 
@@ -152,25 +155,25 @@ def configure_present_screen(connected_screens: list[str]) -> None:
     else:
         proj_output = next((output for output in dp_outputs if output.count("-") == 2))
 
-    if proj_output:
-        config_settings = CONFIGS[config]
-        commands = [
-            (
-                dp_output,
-                config_settings.relation,
-                KnownScreen.INTERNAL,
-                XrandrArg.MODE,
-                config_settings.mode,
-            ),
-            (proj_output, Relation.SAME_AS, dp_output, XrandrArg.AUTO),
-        ]
-        xrandr_command(commands)
+    config_settings = CONFIGS[config]
+    commands = [
+        (
+            dp_output,
+            config_settings.relation,
+            KnownScreen.INTERNAL,
+            XrandrArg.MODE,
+            config_settings.mode,
+        ),
+        (proj_output, Relation.SAME_AS, dp_output, XrandrArg.AUTO),
+    ]
+    xrandr_command(commands)
+    return True
 
 
-def configure_other_screen(selection: str) -> None:
+def configure_other_screen(selection: str) -> bool:
     config = select_option(list(CONFIGS.keys()), "config")
     if config is None:
-        sys.exit(0)  # Exit silently if user aborted the operation
+        return False
 
     try:
         screen = KnownScreen(selection.upper())
@@ -188,20 +191,23 @@ def configure_other_screen(selection: str) -> None:
         )
     ]
     xrandr_command(commands)
+    return True
 
 
 def apply_screen_configuration(selection: str, connected_screens: list[str]) -> None:
-    try:
-        if selection == "internal":
-            configure_internal_screen(connected_screens)
-        elif selection == "home":
-            configure_home_screen()
-        elif selection == "present":
-            configure_present_screen(connected_screens)
-        else:
-            configure_other_screen(selection)
-    except subprocess.CalledProcessError as e:
-        notify_user(f"Error applying screen configuration: {e.stderr}")
+    if selection == "internal":
+        changed = configure_internal_screen(connected_screens)
+    elif selection == "home":
+        changed = configure_home_screen()
+    elif selection == "present":
+        changed = configure_present_screen(connected_screens)
+    else:
+        changed = configure_other_screen(selection)
+
+    if changed:
+        update_hlwm()
+        restore_wallpaper()
+        set_notifications_paused(selection == "present")
 
 
 def set_notifications_paused(paused: bool) -> None:
@@ -225,7 +231,32 @@ def restore_wallpaper() -> None:
         run_subprocess([str(fehbg_path)])
 
 
-def main() -> None:
+def listen() -> None:
+    import pyudev
+
+    context = pyudev.Context()
+    monitor = pyudev.Monitor.from_netlink(context)
+    monitor.filter_by(subsystem='drm')
+
+    for _ in iter(monitor.poll, None):
+        # TODO can we somehow find out whether a screen was connected or disconnected?
+        try:
+            connected_screens = list(get_connected_screens())
+            if connected_screens == [KnownScreen.INTERNAL.value]:
+                apply_screen_configuration("internal", connected_screens)
+            else:
+                run()
+        except Error as e:
+            notify_user(str(e))
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-l", "--listen", action="store_true")
+    return parser.parse_args()
+
+
+def run() -> None:
     connected_screens = list(get_connected_screens())
 
     options = ["internal"]
@@ -243,12 +274,21 @@ def main() -> None:
 
     if screen is None:
         # Exit silently if user aborted the operation
-        sys.exit(0)
+        return
 
     apply_screen_configuration(screen, connected_screens)
-    update_hlwm()
-    restore_wallpaper()
-    set_notifications_paused(screen == "present")
+
+
+def main() -> None:
+    args = parse_args()
+    if args.listen:
+        listen()
+        return
+
+    try:
+        run()
+    except Error as e:
+        notify_user(str(e))
 
 
 if __name__ == "__main__":
