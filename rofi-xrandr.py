@@ -54,12 +54,11 @@ CONFIGS = {
 }
 
 
-def run_subprocess(cmd: list[str]) -> str:
+def run_subprocess(cmd: list[str]) -> subprocess.CompletedProcess[str]:
     try:
-        result = subprocess.run(
+        return subprocess.run(
             cmd, shell=False, text=True, capture_output=True, check=True
         )
-        return result.stdout.strip()
     except subprocess.CalledProcessError as e:
         raise Error(f"Error running subprocess: {e.stderr}")
 
@@ -108,7 +107,9 @@ def xrandr_command(
             opt.value if isinstance(opt, (Relation, KnownScreen, XrandrArg)) else opt
             for opt in options
         ]
-    run_subprocess(args)
+    proc = run_subprocess(args)
+    if proc.stderr:  # but exit code 0
+        notify_user(proc.stderr)
 
 
 def configure_internal_screen(connected_screens: list[str]) -> bool:
@@ -223,7 +224,7 @@ def update_hlwm() -> None:
     run_subprocess(["herbstclient", "detect_monitors"])
     run_subprocess(["herbstclient", "emit_hook", "quit_panel"])
 
-    monitors = run_subprocess(["herbstclient", "list_monitors"]).splitlines()
+    monitors = run_subprocess(["herbstclient", "list_monitors"]).stdout.splitlines()
     for monitor in monitors:
         monitor_id = monitor.split(":")[0]
         subprocess.Popen(["barpyrus", monitor_id])
