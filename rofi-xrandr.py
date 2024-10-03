@@ -113,7 +113,11 @@ def xrandr_command(
 
 def configure_internal_screen(connected_screens: list[str]) -> bool:
     """Turn off everything, only laptop screen."""
-    commands = [(screen, XrandrArg.OFF) for screen in connected_screens]
+    commands = [
+        (screen, XrandrArg.OFF)
+        for screen in connected_screens
+        if screen != KnownScreen.INTERNAL.value
+    ]
     xrandr_command(commands)
     return True
 
