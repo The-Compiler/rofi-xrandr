@@ -10,10 +10,10 @@ DP_PREFIX = "DP"
 
 
 class Relation(Enum):
-    LEFT_OF = "left-of"
-    ABOVE = "above"
-    RIGHT_OF = "right-of"
-    SAME_AS = "same-as"
+    LEFT_OF = "--left-of"
+    ABOVE = "--above"
+    RIGHT_OF = "--right-of"
+    SAME_AS = "--same-as"
 
 
 class XrandrArg(Enum):
