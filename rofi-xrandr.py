@@ -150,26 +150,28 @@ def configure_present_screen(connected_screens: list[str]) -> bool:
     dp_outputs = [
         screen for screen in connected_screens if screen.startswith(DP_PREFIX)
     ]
+    has_hdmi = KnownScreen.HDMI.value in connected_screens
+
     if not dp_outputs:
-        raise Error(f"No DisplayPort outputs found")
-
-    dp_output = next((output for output in dp_outputs if output.count("-") == 1))
-
-    if KnownScreen.HDMI.value in connected_screens:
+        raise Error("No DisplayPort outputs found")
+    elif len(dp_outputs) == 1 and has_hdmi:
         proj_output = KnownScreen.HDMI
+        mirror_output = dp_outputs[0]
+    elif len(dp_outputs) == 2 and not has_hdmi:
+        proj_output, mirror_output = dp_outputs
     else:
-        proj_output = next((output for output in dp_outputs if output.count("-") == 2))
+        raise Error(f"Too many screens found: {', '.join(connected_screens)}")
 
     config_settings = CONFIGS[config]
     commands = [
         (
-            dp_output,
+            mirror_output,
             config_settings.relation,
             KnownScreen.INTERNAL,
             XrandrArg.MODE,
             config_settings.mode,
         ),
-        (proj_output, Relation.SAME_AS, dp_output, XrandrArg.AUTO),
+        (proj_output, Relation.SAME_AS, mirror_output, XrandrArg.AUTO),
     ]
     xrandr_command(commands)
     return True
