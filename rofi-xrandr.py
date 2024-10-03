@@ -25,7 +25,7 @@ class XrandrArg(Enum):
 @dataclass
 class ScreenConfig:
     relation: Relation
-    mode: str
+    args: list[str]
 
 
 class KnownScreen(Enum):
@@ -245,13 +245,15 @@ def listen() -> None:
     monitor.filter_by(subsystem="drm")
 
     for _ in iter(monitor.poll, None):
+        # FIXME: Multiple events can happen in a row... can we run this in background,
+        # kill th existing rofi menu (if any) and start again?
         # TODO can we somehow find out whether a screen was connected or disconnected?
         try:
             connected_screens = list(get_connected_screens())
             if connected_screens == [KnownScreen.INTERNAL.value]:
                 apply_screen_configuration("internal", connected_screens)
-            else:
-                run()
+            # else:
+            #     run()
         except Error as e:
             notify_user(str(e))
 
