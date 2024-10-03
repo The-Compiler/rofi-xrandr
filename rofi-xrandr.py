@@ -6,6 +6,7 @@ import subprocess
 import argparse
 
 DP_PREFIX = "DP"
+PRESENT_MODE = "1920x1080"
 
 
 class Relation(Enum):
@@ -168,9 +169,10 @@ def configure_present_screen(connected_screens: list[str]) -> bool:
             mirror_output,
             config_settings.relation,
             KnownScreen.INTERNAL,
-            *config_settings.args
+            XrandrArg.MODE,
+            PRESENT_MODE,
         ),
-        (proj_output, Relation.SAME_AS, mirror_output, XrandrArg.AUTO),
+        (proj_output, Relation.SAME_AS, mirror_output, XrandrArg.MODE, PRESENT_MODE),
     ]
     xrandr_command(commands)
     return True
