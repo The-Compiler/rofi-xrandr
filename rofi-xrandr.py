@@ -1,5 +1,6 @@
 import os
 import signal
+import traceback
 import contextlib
 from pathlib import Path
 from enum import Enum
@@ -307,6 +308,7 @@ def listen() -> None:
             else:
                 run()
         except Error as e:
+            traceback.print_exc()
             notify_user(str(e))
 
 
@@ -348,6 +350,7 @@ def main() -> None:
     try:
         run()
     except Error as e:
+        traceback.print_exc()
         notify_user(str(e))
 
 
