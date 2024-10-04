@@ -1,4 +1,5 @@
 import os
+import sys
 import signal
 import traceback
 import contextlib
@@ -302,11 +303,15 @@ def listen() -> None:
         # TODO can we somehow find out whether a screen was connected or disconnected?
         try:
             connected_screens = list(get_connected_screens())
+            print(f"Detected change, now connected: {connected_screens}")
+
             if connected_screens == [KnownScreen.INTERNAL.value]:
                 maybe_kill_rofi()
                 apply_screen_configuration("internal", connected_screens)
             else:
-                run()
+                # needs to run in background so that another change can kill
+                # rofi.
+                subprocess.Popen([sys.executable, __file__])
         except Error as e:
             traceback.print_exc()
             notify_user(str(e))
