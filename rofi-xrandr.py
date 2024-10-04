@@ -139,10 +139,10 @@ def select_option(options: list[str], prompt: str) -> str | None:
         stdout, stderr = proc.communicate(input="\n".join(options))
         returncode = proc.poll()
 
-    if returncode == 1:
-        return None  # User aborted the operation
+    if returncode in [1, -signal.SIGTERM]:
+        return None  # User (or we) aborted the operation
     elif returncode != 0:
-        raise Error(f"Error selecting option: {stderr}")
+        raise Error(f"Error selecting option: rofi returned {returncode}\n{stderr}")
     return stdout.strip()
 
 
