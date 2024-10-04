@@ -1,3 +1,7 @@
+import os
+import uuid
+import signal
+import contextlib
 from pathlib import Path
 from enum import Enum
 from dataclasses import dataclass
@@ -5,6 +9,10 @@ from typing import Iterator, Sequence
 import subprocess
 import argparse
 
+import pyudev
+import psutil
+
+PIDFILE_PREFIX = "rofi-xrandr"
 DP_PREFIX = "DP"
 PRESENT_MODE = "1920x1080"
 
@@ -80,18 +88,55 @@ def get_connected_screens() -> Iterator[str]:
             yield screen
 
 
+def xdg_runtime_path() -> Path:
+    return Path(os.environ["XDG_RUNTIME_DIR"])
+
+
+def maybe_kill_rofi() -> None:
+    for path in xdg_runtime_path().glob(f"{PIDFILE_PREFIX}-*.pid"):
+        pid = int(path.read_text())
+
+        try:
+            cmd = psutil.Process(pid).cmdline()[0]
+        except psutil.NoSuchProcess:
+            continue
+
+        if cmd == "rofi":
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+
+        path.unlink(missing_ok=True)
+
+
+@contextlib.contextmanager
+def write_rofi_pidfile(pid: int) -> Iterator[None]:
+    pidfile_path = xdg_runtime_path() / f"{PIDFILE_PREFIX}-{uuid.uuid4()}.pid"
+    pidfile_path.write_text(str(pid))
+    yield
+    pidfile_path.unlink(missing_ok=True)
+
+
 def select_option(options: list[str], prompt: str) -> str | None:
-    result = subprocess.run(
+    maybe_kill_rofi()
+
+    proc = subprocess.Popen(
         ["rofi", "-dmenu", "-p", prompt, "-m", "-5"],
-        input="\n".join(options),
-        text=True,
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        encoding="utf-8",
     )
-    if result.returncode == 1:
+
+    with write_rofi_pidfile(proc.pid):
+        stdout, stderr = proc.communicate(input="\n".join(options))
+        returncode = proc.poll()
+
+    if returncode == 1:
         return None  # User aborted the operation
-    elif result.returncode != 0:
-        raise Error(f"Error selecting option: {result.stderr}")
-    return result.stdout.strip()
+    elif returncode != 0:
+        raise Error(f"Error selecting option: {stderr}")
+    return stdout.strip()
 
 
 def notify_user(message: str) -> None:
@@ -244,22 +289,19 @@ def restore_wallpaper() -> None:
 
 
 def listen() -> None:
-    import pyudev
-
     context = pyudev.Context()
     monitor = pyudev.Monitor.from_netlink(context)
     monitor.filter_by(subsystem="drm")
 
     for _ in iter(monitor.poll, None):
-        # FIXME: Multiple events can happen in a row... can we run this in background,
-        # kill th existing rofi menu (if any) and start again?
         # TODO can we somehow find out whether a screen was connected or disconnected?
         try:
             connected_screens = list(get_connected_screens())
             if connected_screens == [KnownScreen.INTERNAL.value]:
+                maybe_kill_rofi()
                 apply_screen_configuration("internal", connected_screens)
-            # else:
-            #     run()
+            else:
+                run()
         except Error as e:
             notify_user(str(e))
 
