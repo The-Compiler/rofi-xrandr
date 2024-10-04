@@ -9,6 +9,10 @@ DP_PREFIX = "DP"
 PRESENT_MODE = "1920x1080"
 
 
+class Error(Exception):
+    pass
+
+
 class Relation(Enum):
     LEFT_OF = "--left-of"
     ABOVE = "--above"
@@ -23,12 +27,6 @@ class XrandrArg(Enum):
     ROTATE = "--rotate"
 
 
-@dataclass
-class ScreenConfig:
-    relation: Relation
-    args: list[str]
-
-
 class KnownScreen(Enum):
     INTERNAL = "eDP-1"
     HDMI = "HDMI-1"
@@ -41,11 +39,13 @@ class KnownScreen(Enum):
     DP_DOCK_3 = "DP-1-3"
 
 
-class Error(Exception):
-    pass
-
-
 XrandrArgType = str | KnownScreen | Relation | XrandrArg
+
+
+@dataclass
+class ScreenConfig:
+    relation: Relation
+    args: list[XrandrArgType]
 
 
 CONFIGS = {
