@@ -1,5 +1,4 @@
 import os
-import uuid
 import signal
 import contextlib
 from pathlib import Path
@@ -12,7 +11,6 @@ import argparse
 import pyudev
 import psutil
 
-PIDFILE_PREFIX = "rofi-xrandr"
 DP_PREFIX = "DP"
 PRESENT_MODE = "1920x1080"
 
@@ -88,34 +86,40 @@ def get_connected_screens() -> Iterator[str]:
             yield screen
 
 
-def xdg_runtime_path() -> Path:
-    return Path(os.environ["XDG_RUNTIME_DIR"])
+def pidfile_path() -> Path:
+    return Path(os.environ["XDG_RUNTIME_DIR"]) / "rofi-xrandr.pid"
 
 
 def maybe_kill_rofi() -> None:
-    for path in xdg_runtime_path().glob(f"{PIDFILE_PREFIX}-*.pid"):
+    path = pidfile_path()
+
+    try:
         pid = int(path.read_text())
+    except FileNotFoundError:
+        return
 
-        try:
-            cmd = psutil.Process(pid).cmdline()[0]
-        except psutil.NoSuchProcess:
-            continue
-
-        if cmd == "rofi":
-            try:
-                os.kill(pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
-
+    try:
+        cmd = psutil.Process(pid).cmdline()[0]
+    except psutil.NoSuchProcess:
         path.unlink(missing_ok=True)
+        return
+
+    if cmd == "rofi":
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+
+    path.unlink(missing_ok=True)
 
 
 @contextlib.contextmanager
 def write_rofi_pidfile(pid: int) -> Iterator[None]:
-    pidfile_path = xdg_runtime_path() / f"{PIDFILE_PREFIX}-{uuid.uuid4()}.pid"
-    pidfile_path.write_text(str(pid))
+    path = pidfile_path()
+    # FIXME do we need to use O_EXCL?
+    path.write_text(str(pid))
     yield
-    pidfile_path.unlink(missing_ok=True)
+    path.unlink(missing_ok=True)
 
 
 def select_option(options: list[str], prompt: str) -> str | None:
