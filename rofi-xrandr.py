@@ -250,7 +250,6 @@ def configure_other_screen(selection: str) -> bool:
             screen,
             config_settings.relation,
             KnownScreen.INTERNAL,
-            XrandrArg.MODE,
             *config_settings.args,
         )
     ]
