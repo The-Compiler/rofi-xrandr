@@ -45,6 +45,9 @@ class Error(Exception):
     pass
 
 
+XrandrArgType = str | KnownScreen | Relation | XrandrArg
+
+
 CONFIGS = {
     "left": ScreenConfig(Relation.LEFT_OF, [XrandrArg.AUTO]),
     "above": ScreenConfig(Relation.ABOVE, [XrandrArg.AUTO]),
@@ -97,17 +100,18 @@ def notify_user(message: str) -> None:
     )
 
 
-def xrandr_command(
-    commands: Sequence[tuple[str | KnownScreen | Relation | XrandrArg, ...]],
-) -> None:
+def xrandr_arg_to_str(arg: XrandrArgType) -> str:
+    if isinstance(arg, str):
+        return arg
+    return arg.value
+
+
+def xrandr_command(commands: Sequence[tuple[XrandrArgType, ...]]) -> None:
     """Helper method to execute xrandr commands."""
     args = ["xrandr"]
     for output, *options in commands:
-        args += ["--output", output]
-        args += [
-            opt.value if isinstance(opt, (Relation, KnownScreen, XrandrArg)) else opt
-            for opt in options
-        ]
+        args += ["--output", xrandr_arg_to_str(output)]
+        args += [xrandr_arg_to_str(opt) for opt in options]
     proc = run_subprocess(args)
     if proc.stderr:  # but exit code 0
         notify_user(proc.stderr)
