@@ -129,6 +129,7 @@ def select_option(options: list[str], prompt: str) -> str | None:
 
     proc = subprocess.Popen(
         ["rofi", "-dmenu", "-p", prompt, "-m", "-5"],
+        stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         encoding="utf-8",
