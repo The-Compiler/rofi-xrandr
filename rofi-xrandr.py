@@ -180,10 +180,14 @@ def configure_internal_screen(connected_screens: list[str]) -> bool:
     return True
 
 
-def configure_home_screen() -> bool:
-    """[vertical DisplayPort] - [normal USB-C] - [laptop]"""
+def configure_home_screen(present: bool = False) -> bool:
+    """[vertical DisplayPort] - [normal USB-C] - [laptop]
+
+    If present=True, use full HD instead of 4K for USB-C middle screen.
+    """
+    dp2_mode = PRESENT_MODE if present else XrandrArg.AUTO
     commands = [
-        (KnownScreen.DP2, Relation.LEFT_OF, KnownScreen.INTERNAL, XrandrArg.AUTO),
+        (KnownScreen.DP2, Relation.LEFT_OF, KnownScreen.INTERNAL, dp2_mode),
         (
             KnownScreen.DP_DOCK_2,
             Relation.LEFT_OF,
@@ -262,6 +266,8 @@ def apply_screen_configuration(selection: str, connected_screens: list[str]) -> 
         changed = configure_internal_screen(connected_screens)
     elif selection == "home":
         changed = configure_home_screen()
+    elif selection == "home-present":
+        changed = configure_home_screen(present=True)
     elif selection == "present":
         changed = configure_present_screen(connected_screens)
     else:
@@ -270,7 +276,7 @@ def apply_screen_configuration(selection: str, connected_screens: list[str]) -> 
     if changed:
         update_hlwm()
         restore_wallpaper()
-        set_notifications_paused(selection == "present")
+        set_notifications_paused(selection in ["present", "home-present"])
 
 
 def set_notifications_paused(paused: bool) -> None:
@@ -328,7 +334,7 @@ def run() -> None:
 
     options = ["internal"]
     if connected_screens != [KnownScreen.INTERNAL.value]:
-        options += ["home", "present", ""]
+        options += ["home", "home-present", "present", ""]
     for screen in connected_screens:
         if screen == KnownScreen.INTERNAL.value:
             continue
