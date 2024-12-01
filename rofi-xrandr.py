@@ -276,12 +276,14 @@ def apply_screen_configuration(selection: str, connected_screens: list[str]) -> 
     if changed:
         update_hlwm()
         restore_wallpaper()
-        set_notifications_paused(selection in ["present", "home-present"])
+        set_presentation_mode(selection in ["present", "home-present"])
 
 
-def set_notifications_paused(paused: bool) -> None:
-    command = "true" if paused else "false"
-    run_subprocess(["dunstctl", "set-paused", command])
+def set_presentation_mode(present: bool) -> None:
+    dunst_paused = "true" if present else "false"
+    run_subprocess(["dunstctl", "set-paused", dunst_paused])
+    xset_screensaver = "off" if present else "default"
+    run_subprocess(["xset", "s", xset_screensaver])
 
 
 def update_hlwm() -> None:
