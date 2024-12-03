@@ -185,9 +185,9 @@ def configure_home_screen(present: bool = False) -> bool:
 
     If present=True, use full HD instead of 4K for USB-C middle screen.
     """
-    dp2_mode = PRESENT_MODE if present else XrandrArg.AUTO
+    dp2_args = [XrandrArg.MODE, PRESENT_MODE] if present else [XrandrArg.AUTO]
     commands = [
-        (KnownScreen.DP2, Relation.LEFT_OF, KnownScreen.INTERNAL, dp2_mode),
+        (KnownScreen.DP2, Relation.LEFT_OF, KnownScreen.INTERNAL, *dp2_args),
         (
             KnownScreen.DP_DOCK_2,
             Relation.LEFT_OF,
