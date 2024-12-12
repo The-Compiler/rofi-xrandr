@@ -20,6 +20,7 @@ import jc.parsers.xrandr
 
 DP_PREFIX = "DP"
 PRESENT_MODE = "1920x1080"
+MIRROR_MODEL_NAME = "M14d"
 
 
 class Error(Exception):
@@ -250,35 +251,46 @@ def configure_home_screen(present: bool = False) -> bool:
     return True
 
 
+def screens_str(screens: list[ScreenInfo]) -> str:
+    return ', '.join(str(screen) for screen in screens)
+
+
 def configure_present_screen(connected_screens: list[ScreenInfo]) -> bool:
     """[projector] == [external USB-C] - [laptop]"""
     config = select_option(list(CONFIGS.keys()), "config")
     if config is None:
         return False
 
-    dp_outputs = [screen for screen in connected_screens if screen.is_dp()]
-    has_hdmi = has_screen(connected_screens, KnownScreen.HDMI)
+    proj_screens = []
+    mirror_screens = []
 
-    if not dp_outputs:
-        raise Error("No DisplayPort outputs found")
-    elif len(dp_outputs) == 1 and has_hdmi:
-        proj_output = KnownScreen.HDMI
-        mirror_output = dp_outputs[0]
-    elif len(dp_outputs) == 2 and not has_hdmi:
-        proj_output, mirror_output = dp_outputs
-    else:
-        screens_str = ', '.join(str(screen) for screen in connected_screens)
-        raise Error(f"Too many screens found: {screens_str}")
+    for screen in connected_screens:
+        if screen.known_screen == KnownScreen.HDMI:
+            proj_screens.append(KnownScreen.HDMI)
+        elif screen.model_name == MIRROR_MODEL_NAME:
+            assert screen.is_dp(), screen
+            mirror_screens.append(screen.known_screen or screen.name)
+        elif screen.is_dp():
+            proj_screens.append(screen.known_screen or screen.name)
+
+    if len(proj_screens) != 1:
+        raise Error(
+            f"Didn't find exactly 1 project screen: {screens_str(connected_screens)}"
+        )
+    elif len(mirror_screens) != 1:
+        raise Error(
+            f"Didn't find exactly 1 mirror screen: {screens_str(connected_screens)}"
+        )
 
     config_settings = CONFIGS[config]
     commands = [
         (
-            mirror_output,
+            mirror_screens[0],
             config_settings.relation,
             KnownScreen.INTERNAL,
             XrandrArg.AUTO,
         ),
-        (proj_output, Relation.SAME_AS, mirror_output, XrandrArg.AUTO),
+        (proj_screens[0], Relation.SAME_AS, mirror_screens[0], XrandrArg.AUTO),
     ]
     xrandr_command(commands)
     return True
@@ -351,13 +363,10 @@ def restore_wallpaper() -> None:
 
 
 def only_internal_screen(connected_screens: list[ScreenInfo]) -> bool:
-    return len(connected_screens) == 1 and has_screen(
-        connected_screens, KnownScreen.INTERNAL
+    return (
+        len(connected_screens) == 1
+        and connected_screens[0].known_screen == KnownScreen.INTERNAL
     )
-
-
-def has_screen(connected_screens: list[ScreenInfo], screen: KnownScreen) -> bool:
-    return any(screen == screen_info.known_screen for screen_info in connected_screens)
 
 
 def listen() -> None:
