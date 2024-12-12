@@ -229,10 +229,9 @@ def configure_present_screen(connected_screens: list[str]) -> bool:
             mirror_output,
             config_settings.relation,
             KnownScreen.INTERNAL,
-            XrandrArg.MODE,
-            PRESENT_MODE,
+            XrandrArg.AUTO,
         ),
-        (proj_output, Relation.SAME_AS, mirror_output, XrandrArg.MODE, PRESENT_MODE),
+        (proj_output, Relation.SAME_AS, mirror_output, XrandrArg.AUTO),
     ]
     xrandr_command(commands)
     return True
