@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import sys
 import signal
@@ -6,12 +8,15 @@ import contextlib
 from pathlib import Path
 from enum import Enum
 from dataclasses import dataclass
-from typing import Iterator, Sequence
+from typing import Iterator, Sequence, cast
 import subprocess
 import argparse
 
 import pyudev
 import psutil
+import jc
+import jc.parsers.xrandr
+
 
 DP_PREFIX = "DP"
 PRESENT_MODE = "1920x1080"
@@ -47,6 +52,47 @@ class KnownScreen(Enum):
     DP_DOCK_3 = "DP-1-3"
 
 
+@dataclass
+class ScreenInfo:
+    name: str
+    known_screen: KnownScreen | None
+    connected: bool
+    model_name: str | None
+
+    def __str__(self):
+        return self.name
+
+    def is_dp(self):
+        return self.name.startswith(DP_PREFIX)
+
+    @property
+    def pretty_name(self):
+        if self.known_screen is not None:
+            return self.known_screen.name.lower()
+        return self.name
+
+    @classmethod
+    def from_xrandr_json(cls, device: jc.parsers.xrandr.Device) -> ScreenInfo:
+        name = device["device_name"]
+
+        try:
+            known_screen = KnownScreen(name)
+        except ValueError:
+            known_screen = None
+
+        if "EdidModel" in device["props"]:
+            model_name = device["props"]["EdidModel"]["name"]
+        else:
+            model_name = None
+
+        return cls(
+            name=name,
+            known_screen=known_screen,
+            connected=device["is_connected"],
+            model_name=model_name,
+        )
+
+
 XrandrArgType = str | KnownScreen | Relation | XrandrArg
 
 
@@ -74,17 +120,19 @@ def run_subprocess(cmd: list[str]) -> subprocess.CompletedProcess[str]:
         raise Error(f"Error running subprocess: {e.stderr}")
 
 
-def get_connected_screens() -> Iterator[str]:
+def get_connected_screens() -> Iterator[ScreenInfo]:
     try:
-        proc = subprocess.run(["xrandr"], capture_output=True, text=True, check=True)
+        proc = subprocess.run(
+            ["xrandr", "--verbose"], capture_output=True, text=True, check=True
+        )
     except subprocess.CalledProcessError as e:
         raise Error(f"Error checking connected screens: {e.stderr}")
 
-    for line in proc.stdout.splitlines():
-        if line.startswith(" "):
-            continue
-        screen, state, *_ = line.split()
-        if state == "connected":
+    data = cast(jc.parsers.xrandr.Response, jc.parse("xrandr", proc.stdout))
+    assert len(data["screens"]) == 1, data  # xrandr has different terminology
+    for dev_data in data["screens"][0]["devices"]:
+        screen = ScreenInfo.from_xrandr_json(dev_data)
+        if screen.connected:
             yield screen
 
 
@@ -169,12 +217,12 @@ def xrandr_command(commands: Sequence[tuple[XrandrArgType, ...]]) -> None:
         notify_user(proc.stderr)
 
 
-def configure_internal_screen(connected_screens: list[str]) -> bool:
+def configure_internal_screen(connected_screens: list[ScreenInfo]) -> bool:
     """Turn off everything, only laptop screen."""
     commands = [
-        (screen, XrandrArg.OFF)
+        (screen.name, XrandrArg.OFF)
         for screen in connected_screens
-        if screen != KnownScreen.INTERNAL.value
+        if screen.known_screen != KnownScreen.INTERNAL
     ]
     xrandr_command(commands)
     return True
@@ -202,16 +250,14 @@ def configure_home_screen(present: bool = False) -> bool:
     return True
 
 
-def configure_present_screen(connected_screens: list[str]) -> bool:
+def configure_present_screen(connected_screens: list[ScreenInfo]) -> bool:
     """[projector] == [external USB-C] - [laptop]"""
     config = select_option(list(CONFIGS.keys()), "config")
     if config is None:
         return False
 
-    dp_outputs = [
-        screen for screen in connected_screens if screen.startswith(DP_PREFIX)
-    ]
-    has_hdmi = KnownScreen.HDMI.value in connected_screens
+    dp_outputs = [screen for screen in connected_screens if screen.is_dp()]
+    has_hdmi = has_screen(connected_screens, KnownScreen.HDMI)
 
     if not dp_outputs:
         raise Error("No DisplayPort outputs found")
@@ -221,7 +267,8 @@ def configure_present_screen(connected_screens: list[str]) -> bool:
     elif len(dp_outputs) == 2 and not has_hdmi:
         proj_output, mirror_output = dp_outputs
     else:
-        raise Error(f"Too many screens found: {', '.join(connected_screens)}")
+        screens_str = ', '.join(str(screen) for screen in connected_screens)
+        raise Error(f"Too many screens found: {screens_str}")
 
     config_settings = CONFIGS[config]
     commands = [
@@ -260,7 +307,9 @@ def configure_other_screen(selection: str) -> bool:
     return True
 
 
-def apply_screen_configuration(selection: str, connected_screens: list[str]) -> None:
+def apply_screen_configuration(
+    selection: str, connected_screens: list[ScreenInfo]
+) -> None:
     if selection == "internal":
         changed = configure_internal_screen(connected_screens)
     elif selection == "home":
@@ -301,6 +350,16 @@ def restore_wallpaper() -> None:
         run_subprocess([str(fehbg_path)])
 
 
+def only_internal_screen(connected_screens: list[ScreenInfo]) -> bool:
+    return len(connected_screens) == 1 and has_screen(
+        connected_screens, KnownScreen.INTERNAL
+    )
+
+
+def has_screen(connected_screens: list[ScreenInfo], screen: KnownScreen) -> bool:
+    return any(screen == screen_info.known_screen for screen_info in connected_screens)
+
+
 def listen() -> None:
     context = pyudev.Context()
     monitor = pyudev.Monitor.from_netlink(context)
@@ -312,7 +371,7 @@ def listen() -> None:
             connected_screens = list(get_connected_screens())
             print(f"Detected change, now connected: {connected_screens}")
 
-            if connected_screens == [KnownScreen.INTERNAL.value]:
+            if only_internal_screen(connected_screens):
                 maybe_kill_rofi()
                 apply_screen_configuration("internal", connected_screens)
             else:
@@ -334,23 +393,20 @@ def run() -> None:
     connected_screens = list(get_connected_screens())
 
     options = ["internal"]
-    if connected_screens != [KnownScreen.INTERNAL.value]:
+    if not only_internal_screen(connected_screens):
         options += ["home", "home-present", "present", ""]
     for screen in connected_screens:
-        if screen == KnownScreen.INTERNAL.value:
+        if screen.known_screen == KnownScreen.INTERNAL:
             continue
-        try:
-            options.append(KnownScreen(screen).name.lower())
-        except ValueError:
-            options.append(screen)
+        options.append(screen.pretty_name)
 
-    screen = select_option(options, "screen")
+    selection = select_option(options, "screen")
 
-    if screen is None:
+    if selection is None:
         # Exit silently if user aborted the operation
         return
 
-    apply_screen_configuration(screen, connected_screens)
+    apply_screen_configuration(selection, connected_screens)
 
 
 def main() -> None:
