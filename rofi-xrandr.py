@@ -255,12 +255,9 @@ def screens_str(screens: list[ScreenInfo]) -> str:
     return ', '.join(str(screen) for screen in screens)
 
 
-def configure_present_screen(connected_screens: list[ScreenInfo]) -> bool:
-    """[projector] == [external USB-C] - [laptop]"""
-    config = select_option(list(CONFIGS.keys()), "config")
-    if config is None:
-        return False
-
+def find_proj_mirror_screens(
+    connected_screens: list[ScreenInfo],
+) -> tuple[KnownScreen, KnownScreen] | None:
     proj_screens = []
     mirror_screens = []
 
@@ -273,24 +270,32 @@ def configure_present_screen(connected_screens: list[ScreenInfo]) -> bool:
         elif screen.is_dp():
             proj_screens.append(screen.known_screen or screen.name)
 
-    if len(proj_screens) != 1:
-        raise Error(
-            f"Didn't find exactly 1 project screen: {screens_str(connected_screens)}"
-        )
-    elif len(mirror_screens) != 1:
-        raise Error(
-            f"Didn't find exactly 1 mirror screen: {screens_str(connected_screens)}"
-        )
+    if len(proj_screens) == 1 and len(mirror_screens) == 1:
+        return proj_screens[0], mirror_screens[0]
+
+    return None
+
+
+def configure_present_screen(connected_screens: list[ScreenInfo]) -> bool:
+    """[projector] == [external USB-C] - [laptop]"""
+    config = select_option(list(CONFIGS.keys()), "config")
+    if config is None:
+        return False
+
+    proj_mirror_screen = find_proj_mirror_screens(connected_screens)
+    # should be ensured by the menu options
+    assert proj_mirror_screen is not None, screens_str(connected_screens)
+    proj_screen, mirror_screen = proj_mirror_screen
 
     config_settings = CONFIGS[config]
     commands = [
         (
-            mirror_screens[0],
+            mirror_screen,
             config_settings.relation,
             KnownScreen.INTERNAL,
             XrandrArg.AUTO,
         ),
-        (proj_screens[0], Relation.SAME_AS, mirror_screens[0], XrandrArg.AUTO),
+        (proj_screen, Relation.SAME_AS, mirror_screen, XrandrArg.AUTO),
     ]
     xrandr_command(commands)
     return True
@@ -369,6 +374,12 @@ def only_internal_screen(connected_screens: list[ScreenInfo]) -> bool:
     )
 
 
+def connected_screens_equal(
+    connected_screens: list[ScreenInfo], screens: set[KnownScreen]
+) -> bool:
+    return set(screen.known_screen for screen in connected_screens) == screens
+
+
 def listen() -> None:
     context = pyudev.Context()
     monitor = pyudev.Monitor.from_netlink(context)
@@ -380,7 +391,7 @@ def listen() -> None:
             connected_screens = list(get_connected_screens())
             print(f"Detected change, now connected: {connected_screens}")
 
-            if only_internal_screen(connected_screens):
+            if connected_screens_equal(connected_screens, {KnownScreen.INTERNAL}):
                 maybe_kill_rofi()
                 apply_screen_configuration("internal", connected_screens)
             else:
@@ -402,8 +413,17 @@ def run() -> None:
     connected_screens = list(get_connected_screens())
 
     options = ["internal"]
-    if not only_internal_screen(connected_screens):
-        options += ["home", "home-present", "present", ""]
+    if connected_screens_equal(
+        connected_screens,
+        {KnownScreen.INTERNAL, KnownScreen.DP2, KnownScreen.DP_DOCK_2},
+    ):
+        options += ["home", "home-present"]
+
+    if find_proj_mirror_screens(connected_screens):
+        options.append("present")
+
+    options.append("")  # separator
+
     for screen in connected_screens:
         if screen.known_screen == KnownScreen.INTERNAL:
             continue
